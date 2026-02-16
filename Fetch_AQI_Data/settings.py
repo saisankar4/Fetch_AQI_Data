@@ -10,7 +10,12 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.0/ref/settings/
 """
 
+import os
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -25,7 +30,7 @@ SECRET_KEY = 'django-insecure-vq+*q9t@3l^&=pyt77ztan!lgc#z$4n92)6)k=xsou&l#yrqm^
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['saisankar.pythonanywhere.com']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '*','saisankar.pythonanywhere.com']
 
 
 # Application definition
@@ -37,6 +42,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'rest_framework',
+    'aqi_data',
 ]
 
 MIDDLEWARE = [
@@ -73,12 +80,24 @@ WSGI_APPLICATION = 'Fetch_AQI_Data.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/4.0/ref/settings/#databases
 
+# SQLite database for Django's authentication and sessions
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
+
+# MongoDB configuration using MongoEngine
+import mongoengine as me
+
+MONGODB_URI = os.getenv('MONGODB_URI')
+MONGODB_DB = os.getenv('MONGODB_DATABASE', 'aqi_data')
+
+if MONGODB_URI:
+    me.connect(MONGODB_DB, host=MONGODB_URI)
+else:
+    me.connect(MONGODB_DB)
 
 
 # Password validation
@@ -128,3 +147,23 @@ MEDIA_ROOT = '/home/saisankar/Fetch_AQI_Data/media'
 MEDIA_URL = '/media/'
 STATIC_ROOT = '/home/saisankar/Fetch_AQI_Data/static'
 STATIC_URL = '/static/'
+
+# Celery Configuration
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379')
+CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379')
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'UTC'
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
+
+# Django REST Framework Configuration
+REST_FRAMEWORK = {
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 100,
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer',
+        'rest_framework.renderers.BrowsableAPIRenderer',
+    ]
+}

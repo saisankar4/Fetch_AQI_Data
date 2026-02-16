@@ -23,10 +23,8 @@ class Command(BaseCommand):
         state = options.get('state')
         pollutant = options.get('pollutant')
 
-        # Replace these with actual government AQI API endpoints
-        # Example: https://api.data.gov.in/resource/3b01bcb8-0b14-41b3-aadb-e1a27efc3ae2
-        
-        base_url = "https://api.data.gov.in/resource/3b01bcb8-0b14-41b3-aadb-e1a27efc3ae2"
+        # Call data.gov.in API
+        base_url = "https://api.data.gov.in/resource/3b01bcb8-0b14-4abf-b6f2-c1bfd384ba69"
         api_key = "579b464db66ec23bdd000001cadadb66113a49b34bd325f41040f74f"  # Get from data.gov.in
         
         params = {
@@ -47,6 +45,15 @@ class Command(BaseCommand):
             data = response.json()
             
             records_count = 0
+            
+            # Debug output
+            self.stdout.write(f'API Response Status: {response.status_code}')
+            self.stdout.write(f'Response Keys: {list(data.keys())}')
+            self.stdout.write(f'Total records available: {data.get("total", "N/A")}')
+            self.stdout.write(f'Returned records count: {len(data.get("records", []))}')
+            self.stdout.write(f'Count: {data.get("count", "N/A")}')
+            self.stdout.write(f'Status: {data.get("status", "N/A")}')
+            self.stdout.write(f'Message: {data.get("message", "N/A")}')
             
             if 'records' in data:
                 for record in data['records']:

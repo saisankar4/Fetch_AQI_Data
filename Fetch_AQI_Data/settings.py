@@ -91,8 +91,8 @@ DATABASES = {
 # MongoDB configuration using MongoEngine
 import mongoengine as me
 
-MONGODB_URI = os.getenv('MONGODB_URI')
-MONGODB_DB = os.getenv('MONGODB_DATABASE', 'aqi_data')
+MONGODB_URI = 'mongodb+srv://saisankar:system@cluster0.de5ldqt.mongodb.net/?appName=Cluster0'
+MONGODB_DB = 'aqi_data'
 
 if MONGODB_URI:
     me.connect(MONGODB_DB, host=MONGODB_URI)

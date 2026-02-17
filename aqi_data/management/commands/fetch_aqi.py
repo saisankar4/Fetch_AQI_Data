@@ -4,6 +4,60 @@ from aqi_data.models import AQIData, FetchLog
 from datetime import datetime
 
 
+def parse_aqi_record(record):
+    """
+    Parse API record and extract relevant fields for database storage
+    """
+    try:
+        # Parse last_update to get sampling_date and sampling_time
+        last_update = record.get('last_update', '')
+        sampling_date = ''
+        sampling_time = ''
+        
+        if last_update:
+            # Format: '17-02-2026 21:00:00'
+            parts = last_update.split(' ')
+            if len(parts) == 2:
+                sampling_date = parts[0]  # '17-02-2026'
+                sampling_time = parts[1]  # '21:00:00'
+        
+        # Convert string values to float
+        try:
+            value = float(record.get('avg_value', 0)) if record.get('avg_value') else None
+        except (ValueError, TypeError):
+            value = None
+        
+        try:
+            min_val = float(record.get('min_value', 0)) if record.get('min_value') else None
+        except (ValueError, TypeError):
+            min_val = None
+        
+        try:
+            max_val = float(record.get('max_value', 0)) if record.get('max_value') else None
+        except (ValueError, TypeError):
+            max_val = None
+        
+        return {
+            'state': record.get('state', ''),
+            'city': record.get('city', ''),
+            'pollutant_id': record.get('pollutant_id', ''),
+            'pollutant_name': record.get('pollutant_name', ''),
+            'value': value,
+            'min_value': min_val,
+            'max_value': max_val,
+            'unit': record.get('unit', ''),
+            'sampling_date': sampling_date,
+            'sampling_time': sampling_time,
+            'station_name': record.get('station', ''),
+            'latitude': record.get('latitude', ''),
+            'longitude': record.get('longitude', ''),
+            'api_response': str(record)
+        }
+    except Exception as e:
+        print(f"Error parsing record: {str(e)}")
+        return None
+
+
 class Command(BaseCommand):
     help = 'Fetch AQI data from the government API and store in MongoDB'
 
@@ -57,20 +111,30 @@ class Command(BaseCommand):
             
             if 'records' in data:
                 for record in data['records']:
-                    # Create or update AQI data
-                    aqi_data = AQIData(
-                        state=record.get('state', ''),
-                        pollutant_id=record.get('pollutant_id', ''),
-                        pollutant_name=record.get('pollutant_name', ''),
-                        value=float(record.get('value', 0)) if record.get('value') else None,
-                        unit=record.get('unit', ''),
-                        sampling_date=record.get('sampling_date', ''),
-                        sampling_time=record.get('sampling_time', ''),
-                        station_name=record.get('station_name', ''),
-                        api_response=str(record)
-                    )
-                    aqi_data.save()
-                    records_count += 1
+                    # Parse and save AQI data
+                    try:
+                        parsed_data = parse_aqi_record(record)
+                        if parsed_data:
+                            aqi_data = AQIData(
+                                state=parsed_data['state'],
+                                city=parsed_data['city'],
+                                pollutant_id=parsed_data['pollutant_id'],
+                                pollutant_name=parsed_data['pollutant_name'],
+                                value=parsed_data['value'],
+                                min_value=parsed_data['min_value'],
+                                max_value=parsed_data['max_value'],
+                                unit=parsed_data['unit'],
+                                sampling_date=parsed_data['sampling_date'],
+                                sampling_time=parsed_data['sampling_time'],
+                                station_name=parsed_data['station_name'],
+                                latitude=parsed_data['latitude'],
+                                longitude=parsed_data['longitude'],
+                                api_response=parsed_data['api_response']
+                            )
+                            aqi_data.save()
+                            records_count += 1
+                    except Exception as e:
+                        self.stdout.write(f"Error storing record: {str(e)}")
             
             # Log the fetch
             FetchLog(

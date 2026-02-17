@@ -5,6 +5,116 @@ from rest_framework import status
 from .models import AQIData, FetchLog
 import json
 import requests
+from datetime import datetime
+
+
+def parse_aqi_record(record):
+    """
+    Parse API record and extract relevant fields for database storage
+    """
+    try:
+        # Parse last_update to get sampling_date and sampling_time
+        last_update = record.get('last_update', '')
+        sampling_date = ''
+        sampling_time = ''
+        
+        if last_update:
+            # Format: '17-02-2026 21:00:00'
+            parts = last_update.split(' ')
+            if len(parts) == 2:
+                sampling_date = parts[0]  # '17-02-2026'
+                sampling_time = parts[1]  # '21:00:00'
+        
+        # Convert string values to float
+        try:
+            value = float(record.get('avg_value', 0)) if record.get('avg_value') else None
+        except (ValueError, TypeError):
+            value = None
+        
+        try:
+            min_val = float(record.get('min_value', 0)) if record.get('min_value') else None
+        except (ValueError, TypeError):
+            min_val = None
+        
+        try:
+            max_val = float(record.get('max_value', 0)) if record.get('max_value') else None
+        except (ValueError, TypeError):
+            max_val = None
+        
+        return {
+            'state': record.get('state', ''),
+            'city': record.get('city', ''),
+            'pollutant_id': record.get('pollutant_id', ''),
+            'pollutant_name': record.get('pollutant_name', ''),
+            'value': value,
+            'min_value': min_val,
+            'max_value': max_val,
+            'unit': record.get('unit', ''),
+            'sampling_date': sampling_date,
+            'sampling_time': sampling_time,
+            'station_name': record.get('station', ''),
+            'latitude': record.get('latitude', ''),
+            'longitude': record.get('longitude', ''),
+            'api_response': str(record)
+        }
+    except Exception as e:
+        print(f"Error parsing record: {str(e)}")
+        return None
+
+
+class APIDataView(APIView):
+    """
+    API endpoint to retrieve AQI data from the database only.
+    This is called by the UI to get cached data fetched automatically every hour.
+    """
+    def get(self, request):
+        state = request.query_params.get('state')
+        pollutant_id = request.query_params.get('pollutant_id')
+        limit = int(request.query_params.get('limit', 100000))
+        
+        try:
+            # Build query filter
+            query_filter = {}
+            if state:
+                query_filter['state'] = state
+            if pollutant_id:
+                query_filter['pollutant_id'] = pollutant_id
+            
+            # Query from database, sorted by latest timestamp
+            aqi_records = AQIData.objects(**query_filter).order_by('-timestamp')[:limit]
+            
+            # Format response data
+            result = []
+            for record in aqi_records:
+                result.append({
+                    'id': str(record.id),
+                    'state': record.state,
+                    'city': record.city,
+                    'pollutant_id': record.pollutant_id,
+                    'pollutant_name': record.pollutant_name,
+                    'value': record.value,
+                    'min_value': record.min_value,
+                    'max_value': record.max_value,
+                    'unit': record.unit,
+                    'sampling_date': record.sampling_date,
+                    'sampling_time': record.sampling_time,
+                    'station_name': record.station_name,
+                    'latitude': record.latitude,
+                    'longitude': record.longitude,
+                    'timestamp': record.timestamp.isoformat() if record.timestamp else None,
+                })
+            
+            return Response({
+                'status': 'success',
+                'count': len(result),
+                'records': result
+            }, status=status.HTTP_200_OK)
+        
+        except Exception as e:
+            return Response({
+                'status': 'error',
+                'message': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class AQIDataListView(APIView):
@@ -49,6 +159,30 @@ class AQIDataListView(APIView):
             result = []
             if 'records' in api_data:
                 for record in api_data['records']:
+                    # Parse and store record in database
+                    try:
+                        parsed_data = parse_aqi_record(record)
+                        if parsed_data:
+                            aqi_data = AQIData(
+                                state=parsed_data['state'],
+                                city=parsed_data['city'],
+                                pollutant_id=parsed_data['pollutant_id'],
+                                pollutant_name=parsed_data['pollutant_name'],
+                                value=parsed_data['value'],
+                                min_value=parsed_data['min_value'],
+                                max_value=parsed_data['max_value'],
+                                unit=parsed_data['unit'],
+                                sampling_date=parsed_data['sampling_date'],
+                                sampling_time=parsed_data['sampling_time'],
+                                station_name=parsed_data['station_name'],
+                                latitude=parsed_data['latitude'],
+                                longitude=parsed_data['longitude'],
+                                api_response=parsed_data['api_response']
+                            )
+                            aqi_data.save()
+                    except Exception as e:
+                        print(f"Error storing record: {str(e)}")
+                    
                     result.append({
                         'country': record.get('country', ''),
                         'state': record.get('state', ''),
